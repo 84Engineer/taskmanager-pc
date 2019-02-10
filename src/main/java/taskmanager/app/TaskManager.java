@@ -30,13 +30,13 @@ public class TaskManager {
 
         ExecutorService processorService = Executors.newFixedThreadPool(processorCmdsCount * 2);
         processingCommands.forEach(processorService::execute);
+        processorService.shutdown();
 
         ExecutorService downloadService = Executors.newCachedThreadPool();
         downloadService.invokeAll(commands.stream().map(Executors::callable).collect(Collectors.toList()));
-
         downloadService.shutdown();
 
-        processorService.shutdownNow();
+        CommandFactory.getInstance().sendPoison(processorCmdsCount);
 
     }
 

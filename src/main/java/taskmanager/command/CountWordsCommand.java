@@ -20,11 +20,13 @@ public class CountWordsCommand implements Command {
 
     private final BlockingQueue<Path> in;
     private final BlockingQueue<Path> out;
+    private final Path POISON;
     private static final String PROCESSED_SUFFIX = "_processed";
 
-    CountWordsCommand(BlockingQueue<Path> in, BlockingQueue<Path> out) {
+    CountWordsCommand(BlockingQueue<Path> in, BlockingQueue<Path> out, Path poison) {
         this.in = in;
         this.out = out;
+        this.POISON = poison;
     }
 
     @Override
@@ -32,11 +34,16 @@ public class CountWordsCommand implements Command {
 
         while (true) {
             Path input = in.take();
-            Map<String, Long> allWords = getAllWords(Files.lines(input));
-            String output = toOutputFormat(allWords);
-            String[] outFileParts = input.getFileName().toString().split("\\.");
-            writeToFile(output, outFileParts[0] + PROCESSED_SUFFIX + "." + outFileParts[1]);
-            out.put(input);
+            if (!input.equals(POISON)) {
+                Map<String, Long> allWords = getAllWords(Files.lines(input));
+                String output = toOutputFormat(allWords);
+                String[] outFileParts = input.getFileName().toString().split("\\.");
+                writeToFile(output, outFileParts[0] + PROCESSED_SUFFIX + "." + outFileParts[1]);
+                out.put(input);
+            } else {
+                out.put(input);
+                break;
+            }
         }
 
     }
