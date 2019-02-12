@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -21,11 +22,13 @@ public class CountWordsCommand implements Command {
     private final BlockingQueue<Path> in;
     private final BlockingQueue<Path> out;
     private final Path POISON;
+    private final AtomicLong counter;
     private static final String PROCESSED_SUFFIX = "_processed";
 
-    CountWordsCommand(BlockingQueue<Path> in, BlockingQueue<Path> out, Path poison) {
+    CountWordsCommand(BlockingQueue<Path> in, BlockingQueue<Path> out, AtomicLong counter, Path poison) {
         this.in = in;
         this.out = out;
+        this.counter = counter;
         this.POISON = poison;
     }
 
@@ -40,6 +43,7 @@ public class CountWordsCommand implements Command {
                 String[] outFileParts = input.getFileName().toString().split("\\.");
                 writeToFile(output, outFileParts[0] + PROCESSED_SUFFIX + "." + outFileParts[1]);
                 out.put(input);
+                counter.incrementAndGet();
             } else {
                 out.put(input);
                 break;

@@ -1,8 +1,6 @@
 package taskmanager.command;
 
-import java.io.Serializable;
-
-public interface Command extends Runnable, Serializable {
+public interface Command extends Runnable {
 
     default void run() {
         try {

@@ -7,15 +7,18 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class DownloadCommand implements Command {
 
     private final String url;
     private final BlockingQueue<Path> queue;
+    private final AtomicLong counter;
 
-    DownloadCommand(String url, BlockingQueue<Path> queue) {
+    DownloadCommand(String url, BlockingQueue<Path> queue, AtomicLong counter) {
         this.url = url;
         this.queue = queue;
+        this.counter = counter;
     }
 
     @Override
@@ -25,6 +28,7 @@ public class DownloadCommand implements Command {
         try (InputStream in = new URL(url).openStream()) {
             Files.copy(in, outFile, StandardCopyOption.REPLACE_EXISTING);
             queue.put(outFile);
+            counter.incrementAndGet();
         }
     }
 }
