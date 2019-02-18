@@ -24,15 +24,16 @@ public class TaskManager {
 
         int processorCmdsCount = Runtime.getRuntime().availableProcessors();
 
-        List<Command> commands = CommandFactory.getInstance()
-                .initiateCommands(Files.readAllLines(Paths.get(args[0])));
+        List<Command> commands = args[0].equalsIgnoreCase("--restore")
+                ? CommandFactory.getInstance().restoreCommands()
+                : CommandFactory.getInstance().initiateCommands(Files.readAllLines(Paths.get(args[0])));
 
         List<Command> processingCommands = CommandFactory.getInstance().getProcessingCommands(processorCmdsCount);
 
         ExecutorService processorService = Executors.newFixedThreadPool(processorCmdsCount * 2);
         processingCommands.forEach(processorService::execute);
         processorService.shutdown();
-        CommandFactory.getInstance().startStatDaemon(1);
+        CommandFactory.getInstance().startStatDaemon(4);
 
         ExecutorService downloadService = Executors.newCachedThreadPool();
         downloadService.invokeAll(commands.stream().map(Executors::callable).collect(Collectors.toList()));

@@ -1,17 +1,21 @@
 package taskmanager.command;
 
+import taskmanager.data.ProgressData;
+
 import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static taskmanager.data.ProgressData.Status.FILE_PROCESSED;
+
 public class DeleteCommand implements Command {
 
-    private BlockingQueue<Path> in;
-    private final Path POISON;
+    private BlockingQueue<ProgressData> in;
+    private final ProgressData POISON;
     private final AtomicLong counter;
 
-    DeleteCommand(BlockingQueue<Path> in, AtomicLong counter, Path poison) {
+    DeleteCommand(BlockingQueue<ProgressData> in, AtomicLong counter, ProgressData poison) {
         this.in = in;
         this.counter = counter;
         this.POISON = poison;
@@ -19,10 +23,13 @@ public class DeleteCommand implements Command {
 
     @Override
     public void execute() throws Exception {
-        Path input;
-        while (!(input = in.take()).equals(POISON)) {
-            Files.delete(input);
-            counter.incrementAndGet();
+        ProgressData progress;
+        while (!(progress = in.take()).equals(POISON)) {
+            if (progress.getStatus() == FILE_PROCESSED) {
+                Files.delete(Paths.get(progress.getDownloadedFile()));
+                progress.setDeletedFile(progress.getDownloadedFile());
+                counter.incrementAndGet();
+            }
         }
     }
 }

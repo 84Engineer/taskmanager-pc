@@ -11,6 +11,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static taskmanager.data.ProgressData.Status.INITIAL;
+
 public class DownloadCommand implements Command {
 
     private final BlockingQueue<ProgressData> initialQueue;
@@ -26,6 +28,9 @@ public class DownloadCommand implements Command {
     @Override
     public void execute() throws Exception {
         ProgressData progress = initialQueue.take();
+        if (progress.getStatus() != INITIAL) {
+            return;
+        }
         String url = progress.getUrl();
         String[] parts = url.split(/*File.separator*/"/");
         Path outFile = Paths.get(parts[parts.length - 1]);

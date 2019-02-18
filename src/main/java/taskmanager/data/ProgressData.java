@@ -1,7 +1,12 @@
 package taskmanager.data;
 
+import com.sun.istack.internal.NotNull;
+
 import java.io.Serializable;
+import java.util.Objects;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import static taskmanager.data.ProgressData.Status.*;
 
 public class ProgressData implements Serializable {
 
@@ -11,11 +16,18 @@ public class ProgressData implements Serializable {
     private String downloadedFile;
     private String processedFile;
     private String deletedFile;
+    private Status status;
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
-    public ProgressData(String url) {
+    public enum Status {
+        INITIAL, FILE_DOWNLOADED, FILE_PROCESSED, FILE_DELETED;
+    }
+
+    public ProgressData(@NotNull String url) {
+        Objects.requireNonNull(url);
         this.url = url;
+        this.status = INITIAL;
     }
 
     public String getUrl() {
@@ -40,6 +52,7 @@ public class ProgressData implements Serializable {
         lock.writeLock().lock();
         try {
             this.downloadedFile = downloadedFile;
+            this.status = FILE_DOWNLOADED;
         } finally {
             lock.writeLock().unlock();
         }
@@ -58,6 +71,7 @@ public class ProgressData implements Serializable {
         lock.writeLock().lock();
         try {
             this.processedFile = processedFile;
+            this.status = FILE_PROCESSED;
         } finally {
             lock.writeLock().unlock();
         }
@@ -76,18 +90,21 @@ public class ProgressData implements Serializable {
         lock.writeLock().lock();
         try {
             this.deletedFile = deletedFile;
+            this.status = FILE_DELETED;
         } finally {
             lock.writeLock().unlock();
         }
     }
 
+    public Status getStatus() {
+        return status;
+    }
+
     @Override
-    public String toString() {
-        return "ProgressData{" +
-                "url='" + url + '\'' +
-                ", downloadedFile='" + downloadedFile + '\'' +
-                ", processedFile='" + processedFile + '\'' +
-                ", deletedFile='" + deletedFile + '\'' +
-                '}';
+    public boolean equals(Object obj) {
+        if (!(obj instanceof ProgressData)) {
+            return false;
+        }
+        return url.equals(((ProgressData) obj).getUrl());
     }
 }

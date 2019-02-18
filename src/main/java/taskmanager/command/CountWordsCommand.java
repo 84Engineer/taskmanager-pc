@@ -1,8 +1,9 @@
 package taskmanager.command;
 
+import taskmanager.data.ProgressData;
+
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,16 +17,18 @@ import java.util.stream.Stream;
 import static java.lang.System.lineSeparator;
 import static java.util.stream.Collectors.counting;
 import static java.util.stream.Collectors.joining;
+import static taskmanager.data.ProgressData.Status.FILE_DOWNLOADED;
 
 public class CountWordsCommand implements Command {
 
-    private final BlockingQueue<Path> in;
-    private final BlockingQueue<Path> out;
-    private final Path POISON;
+    private final BlockingQueue<ProgressData> in;
+    private final BlockingQueue<ProgressData> out;
+    private final ProgressData POISON;
     private final AtomicLong counter;
     private static final String PROCESSED_SUFFIX = "_processed";
 
-    CountWordsCommand(BlockingQueue<Path> in, BlockingQueue<Path> out, AtomicLong counter, Path poison) {
+    CountWordsCommand(BlockingQueue<ProgressData> in, BlockingQueue<ProgressData> out, AtomicLong counter,
+                      ProgressData poison) {
         this.in = in;
         this.out = out;
         this.counter = counter;
@@ -36,16 +39,23 @@ public class CountWordsCommand implements Command {
     public void execute() throws Exception {
 
         while (true) {
-            Path input = in.take();
-            if (!input.equals(POISON)) {
-                Map<String, Long> allWords = getAllWords(Files.lines(input));
-                String output = toOutputFormat(allWords);
-                String[] outFileParts = input.getFileName().toString().split("\\.");
-                writeToFile(output, outFileParts[0] + PROCESSED_SUFFIX + "." + outFileParts[1]);
-                out.put(input);
-                counter.incrementAndGet();
+            ProgressData progress = in.take();
+            if (!progress.equals(POISON)) {
+                if (progress.getStatus() == FILE_DOWNLOADED) {
+                    String downloadedFile = progress.getDownloadedFile();
+                    Map<String, Long> allWords = getAllWords(
+                            Files.lines(
+                                    Paths.get(downloadedFile)));
+                    String output = toOutputFormat(allWords);
+                    String outFile = getOutFileName(downloadedFile);
+                    writeToFile(output, outFile);
+
+                    progress.setProcessedFile(outFile);
+                    counter.incrementAndGet();
+                }
+                out.put(progress);
             } else {
-                out.put(input);
+                out.put(progress);
                 break;
             }
         }
@@ -56,6 +66,11 @@ public class CountWordsCommand implements Command {
         return input.map(l -> l.split("\\W+"))
                 .flatMap(Stream::of).filter(w -> !w.isEmpty()).map(String::toLowerCase)
                 .collect(Collectors.groupingByConcurrent(Function.identity(), counting()));
+    }
+
+    private String getOutFileName(String inFile) {
+        String[] inFileParts = inFile.split("\\.");
+        return inFileParts[0] + PROCESSED_SUFFIX + "." + inFileParts[1];
     }
 
     private String toOutputFormat(Map<String, Long> wordMap) {
