@@ -17,6 +17,7 @@ public class CommandFactory {
 
     private static final CommandFactory instance = new CommandFactory();
 
+    private final BlockingQueue<ProgressData> initialQueue = new LinkedBlockingQueue<>();
     private final BlockingQueue<Path> downloadedQueue = new LinkedBlockingQueue<>();
     private final BlockingQueue<Path> processedQueue = new LinkedBlockingQueue<>();
     private final Path POISON = Paths.get("POISON");
@@ -57,7 +58,7 @@ public class CommandFactory {
             case "download":
             case "dw":
                 data.add(new ProgressData(cmd[1]));
-                return new DownloadCommand(cmd[1], downloadedQueue, downloadCounter);
+                return new DownloadCommand(initialQueue, downloadedQueue, downloadCounter);
             default:
                 throw new IllegalStateException("Unknown command " + cmd[0]);
 

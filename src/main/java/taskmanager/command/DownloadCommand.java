@@ -1,5 +1,7 @@
 package taskmanager.command;
 
+import taskmanager.data.ProgressData;
+
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.Files;
@@ -11,23 +13,26 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class DownloadCommand implements Command {
 
-    private final String url;
-    private final BlockingQueue<Path> queue;
+    private final BlockingQueue<ProgressData> initialQueue;
+    private final BlockingQueue<ProgressData> queue;
     private final AtomicLong counter;
 
-    DownloadCommand(String url, BlockingQueue<Path> queue, AtomicLong counter) {
-        this.url = url;
+    DownloadCommand(BlockingQueue<ProgressData> initialQueue, BlockingQueue<ProgressData> queue, AtomicLong counter) {
+        this.initialQueue = initialQueue;
         this.queue = queue;
         this.counter = counter;
     }
 
     @Override
     public void execute() throws Exception {
+        ProgressData progress = initialQueue.take();
+        String url = progress.getUrl();
         String[] parts = url.split(/*File.separator*/"/");
         Path outFile = Paths.get(parts[parts.length - 1]);
         try (InputStream in = new URL(url).openStream()) {
             Files.copy(in, outFile, StandardCopyOption.REPLACE_EXISTING);
-            queue.put(outFile);
+            progress.setDownloadedFile(outFile.toString());
+            queue.put(progress);
             counter.incrementAndGet();
         }
     }
