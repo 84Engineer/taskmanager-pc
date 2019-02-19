@@ -15,14 +15,14 @@ import static taskmanager.data.ProgressData.Status.INITIAL;
 
 public class DownloadCommand implements Command {
 
-    private final BlockingQueue<ProgressData> initialQueue;
-    private final BlockingQueue<ProgressData> downloadQueue;
+    private final BlockingQueue<ProgressData> in;
+    private final BlockingQueue<ProgressData> out;
     private final AtomicLong counter;
     private final ProgressData poison;
 
     DownloadCommand(BlockingQueue<ProgressData> initialQueue, BlockingQueue<ProgressData> downloadQueue, AtomicLong counter, ProgressData poison) {
-        this.initialQueue = initialQueue;
-        this.downloadQueue = downloadQueue;
+        this.in = initialQueue;
+        this.out = downloadQueue;
         this.counter = counter;
         this.poison = poison;
     }
@@ -30,26 +30,26 @@ public class DownloadCommand implements Command {
     @Override
     public void execute() throws Exception {
 
-        while(true) {
-            ProgressData progress = initialQueue.take();
-            if (progress.equals(poison)) {
-                downloadQueue.put(poison);
-                break;
+        while (true) {
+            ProgressData progress = in.take();
+            try {
+                if (progress.equals(poison)) {
+                    System.out.println("DOWNLOAD POISONED");
+                    break;
+                } else if (progress.getStatus() == INITIAL) {
+                    String url = progress.getUrl();
+                    String[] parts = url.split("/");
+                    Path outFile = Paths.get(parts[parts.length - 1]);
+                    try (InputStream in = new URL(url).openStream()) {
+                        Files.copy(in, outFile, StandardCopyOption.REPLACE_EXISTING);
+                        progress.setDownloadedFile(outFile.toString());
+                        counter.incrementAndGet();
+                    }
+                }
+            } finally {
+                out.put(progress);
             }
         }
 
-        ProgressData progress = initialQueue.take();
-        if (progress.getStatus() != INITIAL) {
-            return;
-        }
-        String url = progress.getUrl();
-        String[] parts = url.split("/");
-        Path outFile = Paths.get(parts[parts.length - 1]);
-        try (InputStream in = new URL(url).openStream()) {
-            Files.copy(in, outFile, StandardCopyOption.REPLACE_EXISTING);
-            progress.setDownloadedFile(outFile.toString());
-            downloadQueue.put(progress);
-            counter.incrementAndGet();
-        }
     }
 }

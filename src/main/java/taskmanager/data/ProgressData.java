@@ -97,7 +97,12 @@ public class ProgressData implements Serializable {
     }
 
     public Status getStatus() {
-        return status;
+        lock.readLock().lock();
+        try {
+            return status;
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     @Override

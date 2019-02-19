@@ -15,9 +15,8 @@ public class TaskManager {
         }
 
         CommandManager commandManager = new CommandManager(
-                Runtime.getRuntime().availableProcessors(),
                 5 * 60 * 1000,
-                1 * 60 * 1000
+                5 * 1000
         );
 
         if (args[0].equalsIgnoreCase(RESTORE_OPTION)) {

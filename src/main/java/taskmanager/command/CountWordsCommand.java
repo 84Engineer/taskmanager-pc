@@ -40,8 +40,11 @@ public class CountWordsCommand implements Command {
 
         while (true) {
             ProgressData progress = in.take();
-            if (!progress.equals(POISON)) {
-                if (progress.getStatus() == FILE_DOWNLOADED) {
+            try {
+                if (progress.equals(POISON)) {
+                    System.out.println("COUNT POISONED");
+                    break;
+                } else if (progress.getStatus() == FILE_DOWNLOADED) {
                     String downloadedFile = progress.getDownloadedFile();
                     Map<String, Long> allWords = getAllWords(
                             Files.lines(
@@ -53,10 +56,8 @@ public class CountWordsCommand implements Command {
                     progress.setProcessedFile(outFile);
                     counter.incrementAndGet();
                 }
+            } finally {
                 out.put(progress);
-            } else {
-                out.put(progress);
-                break;
             }
         }
 
