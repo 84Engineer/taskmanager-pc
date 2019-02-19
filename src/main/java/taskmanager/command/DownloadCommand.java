@@ -16,28 +16,39 @@ import static taskmanager.data.ProgressData.Status.INITIAL;
 public class DownloadCommand implements Command {
 
     private final BlockingQueue<ProgressData> initialQueue;
-    private final BlockingQueue<ProgressData> queue;
+    private final BlockingQueue<ProgressData> downloadQueue;
     private final AtomicLong counter;
+    private final ProgressData poison;
 
-    DownloadCommand(BlockingQueue<ProgressData> initialQueue, BlockingQueue<ProgressData> queue, AtomicLong counter) {
+    DownloadCommand(BlockingQueue<ProgressData> initialQueue, BlockingQueue<ProgressData> downloadQueue, AtomicLong counter, ProgressData poison) {
         this.initialQueue = initialQueue;
-        this.queue = queue;
+        this.downloadQueue = downloadQueue;
         this.counter = counter;
+        this.poison = poison;
     }
 
     @Override
     public void execute() throws Exception {
+
+        while(true) {
+            ProgressData progress = initialQueue.take();
+            if (progress.equals(poison)) {
+                downloadQueue.put(poison);
+                break;
+            }
+        }
+
         ProgressData progress = initialQueue.take();
         if (progress.getStatus() != INITIAL) {
             return;
         }
         String url = progress.getUrl();
-        String[] parts = url.split(/*File.separator*/"/");
+        String[] parts = url.split("/");
         Path outFile = Paths.get(parts[parts.length - 1]);
         try (InputStream in = new URL(url).openStream()) {
             Files.copy(in, outFile, StandardCopyOption.REPLACE_EXISTING);
             progress.setDownloadedFile(outFile.toString());
-            queue.put(progress);
+            downloadQueue.put(progress);
             counter.incrementAndGet();
         }
     }

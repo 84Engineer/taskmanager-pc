@@ -1,21 +1,23 @@
 package taskmanager.command;
 
 import taskmanager.data.ProgressData;
+import taskmanager.persistence.PersistenceUtil;
 
-import java.io.*;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static java.lang.System.lineSeparator;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.stream.Collectors.toList;
 import static taskmanager.data.ProgressData.Status.INITIAL;
 
-public class CommandFactory {
-
-    private static final CommandFactory instance = new CommandFactory();
+public class CommandManager {
 
     private static final String progressFile = "saved.dat";
 
@@ -29,25 +31,65 @@ public class CommandFactory {
     private final AtomicLong deleteCounter = new AtomicLong();
     private List<ProgressData> data = new ArrayList<>();
 
-    public static CommandFactory getInstance() {
-        return instance;
+    private long downloadTimeout;
+    private long processingTimeout;
+    private long reportPeriodicity;
+
+    public CommandManager(long downloadTimeout, long processingTimeout, long reportPeriodicity) {
+        this.downloadTimeout = downloadTimeout;
+        this.processingTimeout = processingTimeout;
+        this.reportPeriodicity = reportPeriodicity;
     }
 
-    public List<Command> initiateCommands(List<String> cmdLines) throws InterruptedException {
-        List<Command> commands = cmdLines.stream().map(this::parseCommand).collect(toList());
-        initiateProgressSaver();
-        for (ProgressData progressData : data) {
-            initialQueue.put(progressData);
+    public void processCommands(List<String> cmdLines) throws InterruptedException {
+        ExecutorService downloadService = initiateDownloadCommands(cmdLines);
+        launchPersister();
+
+        int processors = Runtime.getRuntime().availableProcessors();
+        ExecutorService processingExecutor = initiateProcessingCommands(processors);
+
+        startStatDaemon(reportPeriodicity);
+
+        downloadService.awaitTermination(downloadTimeout, MILLISECONDS);
+
+        sendPoison(processors);
+
+        processingExecutor.awaitTermination(processingTimeout, MILLISECONDS);
+        printReport();
+    }
+
+    private void process() {
+
+    }
+
+
+    private List<Command> initiateCommands(int processorsCount) {
+        List<Command> commands = new ArrayList<>();
+        for (int i = 0; i < processorsCount; i++) {
+            commands.add(new DownloadCommand(initialQueue, downloadedQueue, downloadCounter, POISON));
+            commands.add(new CountWordsCommand(downloadedQueue, processedQueue, countWordsCounter, POISON));
+            commands.add(new DeleteCommand(processedQueue, deleteCounter, POISON));
         }
         return commands;
     }
 
-    public List<Command> restoreCommands() throws IOException, ClassNotFoundException, InterruptedException {
-        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(progressFile))) {
-            this.data = (List<ProgressData>) in.readObject();
+
+    private ExecutorService initiateDownloadCommands(List<String> cmdLines) throws InterruptedException {
+        List<Command> commands = cmdLines.stream().map(this::parseCommand).collect(toList());
+        for (ProgressData progressData : data) {
+            initialQueue.put(progressData);
         }
+
+        ExecutorService downloadService = Executors.newCachedThreadPool();
+        commands.forEach(downloadService::execute);
+        downloadService.shutdown();
+        return downloadService;
+    }
+
+    public void restoreCommands() throws IOException, ClassNotFoundException, InterruptedException {
+        this.data = (List<ProgressData>) PersistenceUtil.restoreObject(progressFile);
         List<Command> commands = new ArrayList<>();
-        for (ProgressData progressData: data) {
+        for (ProgressData progressData : data) {
             if (progressData.getStatus() == INITIAL) {
                 commands.add(new DownloadCommand(initialQueue, downloadedQueue, downloadCounter));
                 initialQueue.add(progressData);
@@ -55,16 +97,19 @@ public class CommandFactory {
                 downloadedQueue.put(progressData);
             }
         }
-        return commands;
     }
 
-    public List<Command> getProcessingCommands(int processingCmdsCount) {
+    public ExecutorService initiateProcessingCommands(int processingCmdsCount) {
         List<Command> commands = new ArrayList<>();
         for (int i = 0; i < processingCmdsCount; i++) {
             commands.add(new CountWordsCommand(downloadedQueue, processedQueue, countWordsCounter, POISON));
             commands.add(new DeleteCommand(processedQueue, deleteCounter, POISON));
         }
-        return commands;
+        ExecutorService processorService = Executors.newFixedThreadPool(processingCmdsCount * 2);
+        commands.forEach(processorService::execute);
+        processorService.shutdown();
+
+        return processorService;
     }
 
 
@@ -91,11 +136,11 @@ public class CommandFactory {
         }
     }
 
-    public void startStatDaemon(int intervalSeconds) {
+    public void startStatDaemon(long interval) {
         Thread stat = new Thread(() -> {
             while (true) {
                 try {
-                    Thread.sleep(intervalSeconds * 1000);
+                    Thread.sleep(interval);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -115,10 +160,10 @@ public class CommandFactory {
                 + "******************************");
     }
 
-    private void initiateProgressSaver() {
+    private void launchPersister() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(progressFile))) {
-                out.writeObject(data);
+            try {
+                PersistenceUtil.persistObject(data, progressFile);
             } catch (IOException e) {
                 e.printStackTrace();
             }
