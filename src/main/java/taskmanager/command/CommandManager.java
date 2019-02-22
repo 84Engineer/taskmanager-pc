@@ -23,7 +23,9 @@ public class CommandManager {
 
     private static final String progressFile = "saved.dat";
 
-    static final ProgressData POISON = new ProgressData("POISON");
+    private static int progressIdSequence;
+
+    static final ProgressData POISON = new ProgressData("POISON", progressIdSequence++);
 
     private final BlockingQueue<ProgressData> initialQueue = new LinkedBlockingQueue<>();
     private final BlockingQueue<ProgressData> downloadedQueue = new LinkedBlockingQueue<>();
@@ -36,7 +38,7 @@ public class CommandManager {
     private final List<String> downloadCmdNames = asList("d", "download", "dw");
 
     private final ReportManager reportManager;
-    private final PersistenceManager<List<ProgressData>> persistenceManager;
+    private final PersistenceManager persistenceManager;
 
     private long timeout;
 
@@ -49,7 +51,7 @@ public class CommandManager {
                         + "Files deleted: " + deleteCounter.get() + lineSeparator()
                         + "******************************",
                 reportPeriodicity);
-        this.persistenceManager = new PersistenceManager<>(progressFile);
+        this.persistenceManager = new PersistenceManager();
     }
 
     public void processCommands(List<String> cmdLines) throws InterruptedException {
@@ -57,7 +59,7 @@ public class CommandManager {
     }
 
     public void restoreCommands() throws IOException, ClassNotFoundException, InterruptedException {
-        process(persistenceManager.restoreObject());
+        process(persistenceManager.restoreProgress());
     }
 
 
@@ -66,7 +68,6 @@ public class CommandManager {
         List<ProgressData> data = new ArrayList<>(progressData);
         data.addAll(getPoison(Runtime.getRuntime().availableProcessors()));
 
-        persistenceManager.addPersistenceHook(data);
         reportManager.startReportDaemon();
 
         for (ProgressData pd : data) {
@@ -80,9 +81,9 @@ public class CommandManager {
     private ExecutorService initiateCommands(int processorsCount) {
         List<Command> commands = new ArrayList<>();
         for (int i = 0; i < processorsCount; i++) {
-            commands.add(new DownloadCommand(initialQueue, downloadedQueue, downloadCounter, POISON));
-            commands.add(new CountWordsCommand(downloadedQueue, processedQueue, countWordsCounter, POISON));
-            commands.add(new DeleteCommand(processedQueue, deleteCounter, POISON));
+            commands.add(new DownloadCommand(persistenceManager, initialQueue, downloadedQueue, downloadCounter, POISON));
+            commands.add(new CountWordsCommand(persistenceManager, downloadedQueue, processedQueue, countWordsCounter, POISON));
+            commands.add(new DeleteCommand(persistenceManager, processedQueue, deleteCounter, POISON));
         }
         ExecutorService cmdsService = newFixedThreadPool(commands.size());
         commands.forEach(cmdsService::execute);
@@ -94,7 +95,14 @@ public class CommandManager {
         return cmdLines.stream().map(l -> {
             String[] cmd = l.split("\\s+");
             if (downloadCmdNames.contains(cmd[0].toLowerCase())) {
-                return new ProgressData(cmd[1]);
+                ProgressData progressData = new ProgressData(cmd[1], progressIdSequence++);
+                try {
+                    persistenceManager.persistProgress(progressData);
+                } catch (IOException e) {
+                    System.out.println("Failed to persist progress.");
+                    e.printStackTrace();
+                }
+                return progressData;
             } else {
                 throw new IllegalStateException("Unknown command " + cmd[0]);
             }

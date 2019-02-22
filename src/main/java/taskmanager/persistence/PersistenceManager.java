@@ -1,36 +1,42 @@
 package taskmanager.persistence;
 
+import taskmanager.data.ProgressData;
+
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
-public class PersistenceManager<T> {
+public class PersistenceManager {
 
-    private String filePath;
+    private static final String DIR = "src/main/resources/";
 
-    public PersistenceManager(String filePath) {
-        this.filePath = filePath;
-    }
-
-    public void persistObject(T obj) throws IOException {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(filePath))) {
-            out.writeObject(obj);
+    public void persistProgress(ProgressData progress) throws IOException {
+        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(generateFilePath(progress)))) {
+            out.writeObject(progress);
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public T restoreObject() throws IOException, ClassNotFoundException {
-        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(filePath))) {
-            return (T) in.readObject();
-        }
+    public void clearProgress(ProgressData progressData) throws IOException {
+        Files.deleteIfExists(Paths.get(generateFilePath(progressData)));
     }
 
-    public void addPersistenceHook(T obj) {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try {
-                persistObject(obj);
-            } catch (IOException e) {
-                e.printStackTrace();
+    public List<ProgressData> restoreProgress() throws IOException, ClassNotFoundException {
+        List<ProgressData> res = new ArrayList<>();
+        File[] files = new File(DIR).listFiles();
+        if (files != null) {
+            for (File file : files) {
+                try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(file))) {
+                    res.add((ProgressData) in.readObject());
+                }
             }
-        }));
+        }
+        return res;
+    }
+
+    private String generateFilePath(ProgressData progressData) {
+        return DIR + progressData.getClass().getSimpleName() + "_" + progressData.getId();
     }
 
 }

@@ -1,6 +1,7 @@
 package taskmanager.command;
 
 import taskmanager.data.ProgressData;
+import taskmanager.persistence.PersistenceManager;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -19,7 +20,7 @@ import static java.util.stream.Collectors.counting;
 import static java.util.stream.Collectors.joining;
 import static taskmanager.data.ProgressData.Status.FILE_DOWNLOADED;
 
-public class CountWordsCommand implements Command {
+public class CountWordsCommand extends Command {
 
     private final BlockingQueue<ProgressData> in;
     private final BlockingQueue<ProgressData> out;
@@ -27,8 +28,9 @@ public class CountWordsCommand implements Command {
     private final AtomicLong counter;
     private static final String PROCESSED_SUFFIX = "_processed";
 
-    CountWordsCommand(BlockingQueue<ProgressData> in, BlockingQueue<ProgressData> out, AtomicLong counter,
+    CountWordsCommand(PersistenceManager persistenceManager, BlockingQueue<ProgressData> in, BlockingQueue<ProgressData> out, AtomicLong counter,
                       ProgressData poison) {
+        super(persistenceManager);
         this.in = in;
         this.out = out;
         this.counter = counter;
@@ -54,6 +56,7 @@ public class CountWordsCommand implements Command {
                     writeToFile(output, outFile);
 
                     progress.setProcessedFile(outFile);
+                    saveProgress(progress);
                     counter.incrementAndGet();
                 }
             } finally {

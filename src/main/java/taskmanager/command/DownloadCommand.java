@@ -1,6 +1,7 @@
 package taskmanager.command;
 
 import taskmanager.data.ProgressData;
+import taskmanager.persistence.PersistenceManager;
 
 import java.io.InputStream;
 import java.net.URL;
@@ -13,14 +14,15 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static taskmanager.data.ProgressData.Status.INITIAL;
 
-public class DownloadCommand implements Command {
+public class DownloadCommand extends Command {
 
     private final BlockingQueue<ProgressData> in;
     private final BlockingQueue<ProgressData> out;
     private final AtomicLong counter;
     private final ProgressData poison;
 
-    DownloadCommand(BlockingQueue<ProgressData> initialQueue, BlockingQueue<ProgressData> downloadQueue, AtomicLong counter, ProgressData poison) {
+    DownloadCommand(PersistenceManager persistenceManager, BlockingQueue<ProgressData> initialQueue, BlockingQueue<ProgressData> downloadQueue, AtomicLong counter, ProgressData poison) {
+        super(persistenceManager);
         this.in = initialQueue;
         this.out = downloadQueue;
         this.counter = counter;
@@ -43,6 +45,7 @@ public class DownloadCommand implements Command {
                     try (InputStream in = new URL(url).openStream()) {
                         Files.copy(in, outFile, StandardCopyOption.REPLACE_EXISTING);
                         progress.setDownloadedFile(outFile.toString());
+                        saveProgress(progress);
                         counter.incrementAndGet();
                     }
                 }

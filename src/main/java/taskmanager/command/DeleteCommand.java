@@ -1,6 +1,7 @@
 package taskmanager.command;
 
 import taskmanager.data.ProgressData;
+import taskmanager.persistence.PersistenceManager;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -9,13 +10,14 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static taskmanager.data.ProgressData.Status.FILE_PROCESSED;
 
-public class DeleteCommand implements Command {
+public class DeleteCommand extends Command {
 
     private BlockingQueue<ProgressData> in;
     private final ProgressData poison;
     private final AtomicLong counter;
 
-    DeleteCommand(BlockingQueue<ProgressData> in, AtomicLong counter, ProgressData poison) {
+    DeleteCommand(PersistenceManager persistenceManager, BlockingQueue<ProgressData> in, AtomicLong counter, ProgressData poison) {
+        super(persistenceManager);
         this.in = in;
         this.counter = counter;
         this.poison = poison;
@@ -31,6 +33,7 @@ public class DeleteCommand implements Command {
             } else if (progress.getStatus() == FILE_PROCESSED) {
                 Files.delete(Paths.get(progress.getDownloadedFile()));
                 progress.setDeletedFile(progress.getDownloadedFile());
+                clearProgress(progress);
                 counter.incrementAndGet();
             }
         }

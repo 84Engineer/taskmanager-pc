@@ -13,6 +13,7 @@ public class ProgressData implements Serializable {
     static final long serialVersionUID = 1L;
 
     private final String url;
+    private final int id;
     private String downloadedFile;
     private String processedFile;
     private String deletedFile;
@@ -24,9 +25,10 @@ public class ProgressData implements Serializable {
         INITIAL, FILE_DOWNLOADED, FILE_PROCESSED, FILE_DELETED;
     }
 
-    public ProgressData(@NotNull String url) {
+    public ProgressData(@NotNull String url, int id) {
         Objects.requireNonNull(url);
         this.url = url;
+        this.id = id;
         this.status = INITIAL;
     }
 
@@ -103,6 +105,10 @@ public class ProgressData implements Serializable {
         } finally {
             lock.readLock().unlock();
         }
+    }
+
+    public int getId() {
+        return id;
     }
 
     @Override
